@@ -1,0 +1,27 @@
+{
+	"services": [
+		{
+			"queueName": "Customers",
+			"processName": "sum",
+			"environmentName": "serverrobot",
+			"maxRobots": 2
+		},
+		{
+			"queueName": "queue2",
+			"processName": "LogMessages",
+			"environmentName": "LiviuEnv",
+			"maxRobots": 3
+		}
+	],
+	"connection": {
+		"tenancyName": "Default",           
+		"usernameOrEmailAddress": "api",
+		"password": "*******",               
+		"hostname": "platform.uipath.com", 
+		"isSecure": true,                
+		"port": 443, 
+		"invalidCertificate": false, 
+		"connectionPool": 5 
+	},
+	"refreshInterval": 3600
+}

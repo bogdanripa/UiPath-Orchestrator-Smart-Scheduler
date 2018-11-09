@@ -1,0 +1,30 @@
+{
+  "name": "UiPath-Run-Queues",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bogdanripa/UiPath-Run-Queues.git"
+  },
+  "keywords": [
+    "UiPath",
+    "run",
+    "queues"
+  ],
+  "author": "Bogdan Ripa",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bogdanripa/UiPath-Run-Queues/issues"
+  },
+  "homepage": "https://github.com/bogdanripa/UiPath-Run-Queues",
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "express": "^4.16.3",
+    "json-stringify-safe": "^5.0.1",
+    "uipath-orchestrator": "^1.0.2"
+  }
+}
