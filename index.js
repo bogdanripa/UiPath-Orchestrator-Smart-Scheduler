@@ -11,36 +11,23 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-var settingsFile = process.argv[1].replace(/\/[^\/]+$/, "/settings.json");
-var settings = {services: []};
-
-function loadSettings() {
-	return new Promise(function (fulfill, reject){
-		fs.exists(settingsFile, function(exists){
-			if (exists) {
-				fs.readFile(settingsFile, function readFileCallback(err, data) {
-					if (err){
-						console.log("Error reading 'settings.json': " + err);
-						reject();
-					} else {
-						settings = JSON.parse(data);
-						orchestrator = new Orchestrator(settings.connection);
-						fulfill();
-					}
-				});
-			} else {
-				reject();
-			}
-		});
-	});
-}
+//var settingsFile = process.argv[1].replace(/\/[^\/]+$/, "/settings.json");
+var settings = require('./settings.json');
+var orchestrator = new Orchestrator(settings.connection);
 
 function getRunningJobs(service) {
 	return new Promise(function (fulfill, reject){
 		orchestrator.v2.odata.getJobs({"$filter": "ReleaseName eq '"+service.processName+"_"+service.environmentName+"' and (State eq 'Pending' or State eq 'Running')", "$top": 0, "$count": "true"}, function(err, data) {
-			// TODO: treat errors
-			service.count = data["@odata.count"];
-			fulfill();
+			if (err) {
+				reject(err);
+			} else {
+				try {
+					service.count = data["@odata.count"];
+					fulfill();
+				} catch(err) {
+					reject("Malformed response: Cannot get jobs count");
+				}
+			}
 		});
 	});
 }
@@ -48,9 +35,16 @@ function getRunningJobs(service) {
 function getProcessKey(service) {
 	return new Promise(function (fulfill, reject){
 		orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + service.processName + "' and EnvironmentName eq '" + service.environmentName + "'"}, function(err, data) {
-			// TODO: treat errors
-			service.key = data.value[0].Key;
-			fulfill();
+			if (err) {
+				reject(err);
+			} else {
+				try {
+					service.key = data.value[0].Key;
+					fulfill();
+				} catch(err) {
+					reject("Malformed response: Cannot get process key");
+				}
+			}
 		});
 	});
 }
@@ -64,20 +58,26 @@ function getJobExecutionCount() {
 				servicesPromises.push(getProcessKey(service));
 			}
 		});
-		Promise.all(servicesPromises).then(function() {
-			console.log("Got all current running jobs details");
-			fulfill();
-		});
+		Promise.all(servicesPromises)
+			.then(function() {
+				console.log("Got all current running jobs details");
+				fulfill();
+			})
+			.catch(function(err) {
+				reject(err)
+			});
 	});
 }
 
 
 function init() {
-	loadSettings()
-		.then(getJobExecutionCount)
+	getJobExecutionCount()
 		.then(function() {
-			setInterval(getJobExecutionCount, settings.refreshInterval*1000);
 			app.listen(80, "0.0.0.0", function() {console.log('Listening on port 80!')});
+			setInterval(getJobExecutionCount, settings.refreshInterval*1000);
+		})
+		.catch(function(err) {
+			console.log(err);
 		});
 }
 
@@ -87,58 +87,61 @@ app.get('/', function(req, res) {
 });
 
 app.post('/webhooks/jobs/created', function(req, res) {
-	// TODO: treat errors
 	// TODO: check secret key
 	req.body.Jobs.forEach(function(job) {
-		settings.services.forEach(function(service) {
-			if (job.ReleaseName == service.processName + "_" + service.environmentName) {
-				service.count++;
-				console.log(job.ReleaseName + ": " + service.count);
-			}
+		var service = settings.services.find(function(service) {
+			return job.ReleaseName == service.processName + "_" + service.environmentName;
 		});
+		if (service) {
+			service.count++;
+			console.log(job.ReleaseName + ": " + service.count);
+		}
 	});
 	res.send();
 });
 
 app.post('/webhooks/jobs/finished', function(req, res) {
-	// TODO: treat errors
 	// TODO: check secret key
-	settings.services.forEach(function(service) {
-		if (req.body.Job.Release.Name == service.processName + "_" + service.environmentName) {
-			service.count--;
-			console.log(req.body.Job.Release.Name + ": " + service.count);
-		}
+	
+	var service = settings.services.find(function(service) {
+		return req.body.Job.Release.Name == service.processName + "_" + service.environmentName;
 	});
+	if (service) {
+		service.count--;
+		console.log(req.body.Job.Release.Name + ": " + service.count);
+	}
 	res.send();
 });
 
-app.all('/webhooks/queues/items/created', function(req, res) {
+app.get('/webhooks/queues/items/created', function(req, res) {
+	// TODO: check secret key
+	
 	var queueName = "Customers"; // TODO: replace with the actual queue name once it is implemented
 	var key = '';
 	var shouldRun = false;
-	settings.services.forEach(function(service) {
-		if (service.queueName == queueName) {
-			key = service.key;
-			shouldRun = (service.count < service.maxRobots);
-		}
+
+	var service = settings.services.find(function(service) {
+		return service.queueName == queueName;
 	});
-	if (!shouldRun) {
-		res.send();
-		return;
+
+	if (service) {
+		if (service.count + 1 > service.maxRobots) {
+			res.send();
+			return;
+		}
+		jobParams = {
+			"startInfo": {
+				"ReleaseKey": service.key,
+				"Strategy": "JobsCount",
+				"JobsCount": 1,
+				"Source": "Schedule",
+				"InputArguments": "{}"
+			}
+	
+		};
+
+		orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function() {});
 	}
-	jobParams = {
-		"startInfo": {
-			"ReleaseKey": key,
-			"Strategy": "JobsCount",
-			"JobsCount": 1,
-			"Source": "Schedule",
-			"InputArguments": "{}"
-		}
-
-	};
-
-	orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function() {
-	});
 
 	console.log(req.method + " " + req.originalUrl);
 	console.log(req.body);
