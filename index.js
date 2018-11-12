@@ -49,7 +49,8 @@ function getProcessKey(service) {
 	});
 }
 
-function getJobExecutionCount() {
+// gets number of running jobs and process keys for all processes
+function getProcessDetails() {
 	return new Promise(function (fulfill, reject){
 		var servicesPromises = [];
 		settings.services.forEach(function(service) {
@@ -63,17 +64,71 @@ function getJobExecutionCount() {
 				console.log("Got all current running jobs details");
 				fulfill();
 			})
-			.catch(function(err) {
-				reject(err)
-			});
+			.catch(reject);
+	});
+}
+
+function startProcessing(service) {
+	return new Promise(function (fulfill, reject){
+		console.log(service.processName + ": " + service.count + " jobs running");
+		console.log(service.processName + ": " + service.maxRobots + " max jobs");
+		if (service.count >= service.maxRobots) {
+			// no need to start new jobs, they are already running
+			fulfill();
+		}
+		// get the number of items to be processed in this queue
+		orchestrator.v2.odata.getRetrieveQueuesProcessingStatus({"$filter": "QueueDefinitionName eq '" + service.queueName + "'"}, function(err, data) {
+			if (err) {
+				reject(err);
+			} else {
+				try {
+					var itemsToProcess = data.value[0].ItemsToProcess;
+					console.log(service.queueName + ": " + itemsToProcess + " items to process");
+					var newJobsCount = Math.min(itemsToProcess, service.maxRobots - service.count);
+					console.log(service.processName + ": " + newJobsCount + " jobs to start");
+					if (newJobsCount > 0) {
+						startJobForQueue(service.queueName, newJobsCount);
+					}
+					fulfill();
+				} catch(err) {
+					reject("Malformed response: Cannot get Queue size");
+				}
+			}
+		});
+		fulfill();
+	});
+}
+
+function startProcessingJobs() {
+	return new Promise(function (fulfill, reject){
+		var servicesPromises = [];
+		settings.services.forEach(function(service) {
+			servicesPromises.push(startProcessing(service));
+		});
+		Promise.all(servicesPromises)
+			.then(function() {
+				fulfill();
+			})
+			.catch(reject);
+	});
+}
+
+function refresh() {
+	return new Promise(function (fulfill, reject){
+		getProcessDetails()
+			.then(startProcessingJobs)
+			.then(fulfill)
+			.catch(reject);
+
 	});
 }
 
 function init() {
-	getJobExecutionCount()
+	getProcessDetails()
 		.then(function() {
 			app.listen(80, "0.0.0.0", function() {console.log('Listening on port 80!')});
-			setInterval(getJobExecutionCount, settings.refreshInterval*1000);
+			startProcessingJobs();
+			setInterval(refresh, settings.refreshInterval*1000);
 		})
 		.catch(function(err) {
 			console.log(err);
@@ -131,37 +186,46 @@ app.get('/webhooks/queues/items/created', function(req, res) {
 	}
 
 	var queueName = "Customers"; // TODO: replace with the actual queue name once it is implemented
-	var key = '';
-	var shouldRun = false;
 
-	var service = settings.services.find(function(service) {
-		return service.queueName == queueName;
-	});
-
-	if (service) {
-		if (service.count + 1 > service.maxRobots) {
-			res.send();
-			return;
-		}
-		jobParams = {
-			"startInfo": {
-				"ReleaseKey": service.key,
-				"Strategy": "JobsCount",
-				"JobsCount": 1,
-				"Source": "Schedule",
-				"InputArguments": "{}"
-			}
-	
-		};
-
-		orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function() {});
-	}
+	startJobForQueue(queueName, 1);
 
 	console.log(req.method + " " + req.originalUrl);
 	console.log(req.body);
 	console.log(req.headers);
 	res.send();
 });
+
+function startJobForQueue(queueName, runs) {
+	return new Promise(function (fulfill, reject){
+		var key = '';
+		var shouldRun = false;
+	
+		var service = settings.services.find(function(service) {
+			return service.queueName == queueName;
+		});
+	
+		if (service) {
+			if (service.count + 1 > service.maxRobots) {
+				res.send();
+				return;
+			}
+			jobParams = {
+				"startInfo": {
+					"ReleaseKey": service.key,
+					"Strategy": "JobsCount",
+					"JobsCount": runs,
+					"Source": "Schedule",
+					"InputArguments": "{}"
+				}
+		
+			};
+
+			orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, fulfill);
+		} else {
+			reject("No job found for queue " + queueName);
+		}
+	});
+}
 
 app.all('*', function(req, res) {
 	console.log(req.method + " " + req.originalUrl);
