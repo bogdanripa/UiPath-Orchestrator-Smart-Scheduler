@@ -69,7 +69,6 @@ function getJobExecutionCount() {
 	});
 }
 
-
 function init() {
 	getJobExecutionCount()
 		.then(function() {
@@ -81,13 +80,22 @@ function init() {
 		});
 }
 
+function checkSecretKey(signature) {
+	// TODO: check secret key
+	return true;
+}
+
 
 app.get('/', function(req, res) {
 	res.send('Hello World!');
 });
 
 app.post('/webhooks/jobs/created', function(req, res) {
-	// TODO: check secret key
+	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+		res.status(401);
+		return;
+	}
+
 	req.body.Jobs.forEach(function(job) {
 		var service = settings.services.find(function(service) {
 			return job.ReleaseName == service.processName + "_" + service.environmentName;
@@ -101,8 +109,11 @@ app.post('/webhooks/jobs/created', function(req, res) {
 });
 
 app.post('/webhooks/jobs/finished', function(req, res) {
-	// TODO: check secret key
-	
+	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+		res.status(401);
+		return;
+	}
+
 	var service = settings.services.find(function(service) {
 		return req.body.Job.Release.Name == service.processName + "_" + service.environmentName;
 	});
@@ -114,8 +125,11 @@ app.post('/webhooks/jobs/finished', function(req, res) {
 });
 
 app.get('/webhooks/queues/items/created', function(req, res) {
-	// TODO: check secret key
-	
+	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+		res.status(401);
+		return;
+	}
+
 	var queueName = "Customers"; // TODO: replace with the actual queue name once it is implemented
 	var key = '';
 	var shouldRun = false;
