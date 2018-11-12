@@ -1,7 +1,7 @@
 # UiPath-Orchestrator-Run-Queues
 Node.js app that will automatically run a process when a queue item is added
 
-Installation / set-up instructions
+## Installation / set-up instructions
 
 1. make sure you install this on a computer that has a public IP address
 2. git clone this repo
