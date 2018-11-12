@@ -15,6 +15,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 var settings = require('./settings.json');
 var orchestrator = new Orchestrator(settings.connection);
 
+// updates the service object with the number of jobs currently running
 function getRunningJobs(service) {
 	return new Promise(function (fulfill, reject){
 		orchestrator.v2.odata.getJobs({"$filter": "ReleaseName eq '"+service.processName+"_"+service.environmentName+"' and (State eq 'Pending' or State eq 'Running')", "$top": 0, "$count": "true"}, function(err, data) {
@@ -32,6 +33,7 @@ function getRunningJobs(service) {
 	});
 }
 
+// updates the service object with the process key, needed for further API calls
 function getProcessKey(service) {
 	return new Promise(function (fulfill, reject){
 		orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + service.processName + "' and EnvironmentName eq '" + service.environmentName + "'"}, function(err, data) {
@@ -49,7 +51,7 @@ function getProcessKey(service) {
 	});
 }
 
-// gets number of running jobs and process keys for all processes
+// gets number of running jobs and process keys for all services
 function getProcessDetails() {
 	return new Promise(function (fulfill, reject){
 		var servicesPromises = [];
@@ -68,6 +70,8 @@ function getProcessDetails() {
 	});
 }
 
+// Start processing for a service.
+// This will try to strat as many jobs as possible to process asap the items in the corresponding queue
 function startProcessing(service) {
 	return new Promise(function (fulfill, reject){
 		console.log(service.processName + ": " + service.count + " jobs running");
@@ -99,6 +103,7 @@ function startProcessing(service) {
 	});
 }
 
+// starts processing jobs for all services
 function startProcessingJobs() {
 	return new Promise(function (fulfill, reject){
 		var servicesPromises = [];
@@ -113,6 +118,7 @@ function startProcessingJobs() {
 	});
 }
 
+// in case a webhook api call is missed, or if queue items become available to be processed (ex: the ones that were delayed), the jobs count cash is refreshed, and new jobs are started as needed
 function refresh() {
 	return new Promise(function (fulfill, reject){
 		getProcessDetails()
@@ -135,6 +141,7 @@ function init() {
 		});
 }
 
+// checks signature to authenticate the caller (UiPath)
 function checkSecretKey(signature) {
 	// TODO: check secret key
 	return true;
@@ -195,6 +202,7 @@ app.get('/webhooks/queues/items/created', function(req, res) {
 	res.send();
 });
 
+// queues a number of jobs for a specific process corresponding to a queue name
 function startJobForQueue(queueName, runs) {
 	return new Promise(function (fulfill, reject){
 		var key = '';
