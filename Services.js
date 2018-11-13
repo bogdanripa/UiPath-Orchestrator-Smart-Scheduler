@@ -141,7 +141,7 @@ Services.prototype.startJobForQueue = function(queueName, runs) {
 	}.bind(this));
 }
 
-Services.prototype.jobFinished = function(jobName) {
+Services.prototype.onJobFinished = function(jobName) {
 	var service = this.settings.services.find(function(service) {
 		return jobName == service.processName + "_" + service.environmentName;
 	});
@@ -151,7 +151,7 @@ Services.prototype.jobFinished = function(jobName) {
 	}
 }
 
-Services.prototype.jobCreated = function(jobName) {
+Services.prototype.onJobCreated = function(jobName) {
 	var service = this.settings.services.find(function(service) {
 		return jobName == service.processName + "_" + service.environmentName;
 	});

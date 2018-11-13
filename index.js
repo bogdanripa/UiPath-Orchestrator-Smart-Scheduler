@@ -52,7 +52,7 @@ app.post('/webhooks/jobs/created', function(req, res) {
 	}
 
 	req.body.Jobs.forEach(function(job) {
-		services.jobCreated(job.ReleaseName);
+		services.onJobCreated(job.ReleaseName);
 	});
 	res.send();
 });
@@ -63,7 +63,7 @@ app.post('/webhooks/jobs/finished', function(req, res) {
 		return;
 	}
 
-	services.jobFinished(req.body.Job.Release.Name);
+	services.onJobFinished(req.body.Job.Release.Name);
 
 	res.send();
 });
