@@ -68,19 +68,14 @@ app.post('/webhooks/jobs/finished', function(req, res) {
 	res.send();
 });
 
-app.get('/webhooks/queues/items/created', function(req, res) {
+app.post('/webhooks/queues/items/created', function(req, res) {
 	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
 		res.status(401);
 		return;
 	}
 
-	var queueName = "Customers"; // TODO: replace with the actual queue name once it is implemented
+	services.startJobForQueue(req.body.QueueItem.QueueDefinitionId, 1);
 
-	services.startJobForQueue(queueName, 1);
-
-	console.log(req.method + " " + req.originalUrl);
-	console.log(req.body);
-	console.log(req.headers);
 	res.send();
 });
 

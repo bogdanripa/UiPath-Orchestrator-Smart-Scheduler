@@ -5,10 +5,14 @@ function Services(settings) {
 	this.orchestrator = new Orchestrator(settings.connection);
 }
 
+function odataEscape(str) {
+	return str.replace(/'/g, "''");
+}
+
 // updates the service object with the number of jobs currently running
 Services.prototype.getRunningJobs = function(service) {
 	return new Promise(function (fulfill, reject){
-		this.orchestrator.v2.odata.getJobs({"$filter": "ReleaseName eq '"+service.processName+"_"+service.environmentName+"' and (State eq 'Pending' or State eq 'Running')", "$top": 0, "$count": "true"}, function(err, data) {
+		this.orchestrator.v2.odata.getJobs({"$filter": "ReleaseName eq '" + odataEscape(service.processName) + "_" + odataEscape(service.environmentName) + "' and (State eq 'Pending' or State eq 'Running')", "$top": 0, "$count": "true"}, function(err, data) {
 			if (err) {
 				reject(err);
 			} else {
@@ -26,12 +30,30 @@ Services.prototype.getRunningJobs = function(service) {
 // updates the service object with the process key, needed for further API calls
 Services.prototype.getProcessKey = function(service) {
 	return new Promise(function (fulfill, reject){
-		this.orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + service.processName + "' and EnvironmentName eq '" + service.environmentName + "'"}, function(err, data) {
+		this.orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + odataEscape(service.processName) + "' and EnvironmentName eq '" + odataEscape(service.environmentName) + "'"}, function(err, data) {
 			if (err) {
 				reject(err);
 			} else {
 				try {
 					service.key = data.value[0].Key;
+					fulfill();
+				} catch(err) {
+					reject("Malformed response: Cannot get process key");
+				}
+			}
+		});
+	}.bind(this));
+}
+
+// updates the service object with the queue Id
+Services.prototype.getQueueId = function(service) {
+	return new Promise(function (fulfill, reject){
+		this.orchestrator.v2.odata.getQueueDefinitions({"$filter": "Name eq '" + odataEscape(service.queueName) + "'"}, function(err, data) {
+			if (err) {
+				reject(err);
+			} else {
+				try {
+					service.queueId = data.value[0].Id;
 					fulfill();
 				} catch(err) {
 					reject("Malformed response: Cannot get process key");
@@ -49,6 +71,9 @@ Services.prototype.getProcessDetails = function() {
 			servicesPromises.push(this.getRunningJobs(service));
 			if (!service.key) {
 				servicesPromises.push(this.getProcessKey(service));
+			}
+			if (!service.queueId) {
+				servicesPromises.push(this.getQueueId(service));
 			}
 		}.bind(this));
 		Promise.all(servicesPromises)
@@ -81,7 +106,7 @@ Services.prototype.startProcessing = function(service) {
 					var newJobsCount = Math.min(itemsToProcess, service.maxRobots - service.count);
 					console.log(service.processName + ": " + newJobsCount + " jobs to start");
 					if (newJobsCount > 0) {
-						this.startJobForQueue(service.queueName, newJobsCount);
+						this.startJobForQueue(service.queueId, newJobsCount);
 					}
 					fulfill();
 				} catch(err) {
@@ -108,18 +133,20 @@ Services.prototype.startProcessingJobs = function() {
 	}.bind(this));
 }
 
-// queues a number of jobs for a specific process corresponding to a queue name
-Services.prototype.startJobForQueue = function(queueName, runs) {
+// queues a number of jobs for a specific process corresponding to a queue id
+Services.prototype.startJobForQueue = function(queueId, runs) {
 	return new Promise(function (fulfill, reject){
 		var key = '';
 		var shouldRun = false;
 	
 		var service = this.settings.services.find(function(service) {
-			return service.queueName == queueName;
+			return service.queueId == queueId;
 		});
 	
 		if (service) {
+			console.log(service.queueName + ": new item added");
 			if (service.count + 1 > service.maxRobots) {
+				console.log(service.queueName + ": max robots reached");
 				fulfill();
 				return;
 			}
@@ -136,7 +163,7 @@ Services.prototype.startJobForQueue = function(queueName, runs) {
 
 			this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, fulfill);
 		} else {
-			reject("No job found for queue " + queueName);
+			reject("No job found for queue " + queueId);
 		}
 	}.bind(this));
 }
