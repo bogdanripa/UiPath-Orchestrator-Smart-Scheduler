@@ -1,8 +1,15 @@
 const express = require('express');
-var bodyParser = require('body-parser');
-var Services = require('./Services.js');
+const bodyParser = require('body-parser');
+const Services = require('./Services.js');
+const { createHmac } = require('crypto');
+const app = express();
 
-var app = express();
+app.use(bodyParser.json({
+	verify: function(req, res, buf, encoding) {
+		req.buffer = buf;
+	}
+}));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -35,18 +42,17 @@ function init() {
 }
 
 // checks signature to authenticate the caller (UiPath)
-function checkSecretKey(signature) {
-	// TODO: check secret key
-	return true;
+function checkSecretKey(signature, buffer) {
+	return createHmac('sha256', settings.secretKey).update(buffer).digest('base64') === signature;
 }
-
 
 app.get('/', function(req, res) {
 	res.send('Hello World!');
 });
 
 app.post('/webhooks/jobs/created', function(req, res) {
-	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+	if (!checkSecretKey(req.headers['x-uipath-signature'], req.buffer)) {
+		console.log("Wrong signature!");
 		res.status(401);
 		return;
 	}
@@ -58,7 +64,8 @@ app.post('/webhooks/jobs/created', function(req, res) {
 });
 
 app.post('/webhooks/jobs/finished', function(req, res) {
-	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+	if (!checkSecretKey(req.headers['x-uipath-signature'], req.buffer)) {
+		console.log("Wrong signature!");
 		res.status(401);
 		return;
 	}
@@ -69,7 +76,8 @@ app.post('/webhooks/jobs/finished', function(req, res) {
 });
 
 app.post('/webhooks/queues/items/created', function(req, res) {
-	if (!checkSecretKey(req.get('X-Orchestrator-Signature'))) {
+	if (!checkSecretKey(req.headers['x-uipath-signature'], req.buffer)) {
+		console.log("Wrong signature!");
 		res.status(401);
 		return;
 	}

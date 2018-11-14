@@ -23,5 +23,6 @@
 		"invalidCertificate": false, 
 		"connectionPool": 5 
 	},
-	"refreshInterval": 3600
+	"refreshInterval": 3600,
+	"secretKey": "YOUR_ORCHESTRATOR_WEBHOOKS_SECRET_KEY_HERE"
 }
