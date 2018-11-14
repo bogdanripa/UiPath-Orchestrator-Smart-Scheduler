@@ -73,6 +73,7 @@ app.post('/webhooks/queues/items/created', function(req, res) {
 		res.status(401);
 		return;
 	}
+	console.log("New queue item added");
 
 	services.startJobForQueue(req.body.QueueItem.QueueDefinitionId, 1);
 

@@ -144,7 +144,6 @@ Services.prototype.startJobForQueue = function(queueId, runs) {
 		});
 	
 		if (service) {
-			console.log(service.queueName + ": new item added");
 			if (service.count + 1 > service.maxRobots) {
 				console.log(service.queueName + ": max robots reached");
 				fulfill();
