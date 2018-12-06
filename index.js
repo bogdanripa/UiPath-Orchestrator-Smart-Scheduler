@@ -20,8 +20,9 @@ var services = new Services(settings);
 // in case a webhook api call is missed, or if queue items become available to be processed (ex: the ones that were delayed), the jobs count cash is refreshed, and new jobs are started as needed
 function refresh() {
 	return new Promise(function (fulfill, reject){
-		services.getProcessDetails()
-			.then(services.startProcessingJobs)
+		services.getQueueDetails()
+			.then(services.getProcessDetails.bind(services))
+			.then(services.startProcessingJobs.bind(services))
 			.then(fulfill)
 			.catch(reject);
 
@@ -31,6 +32,7 @@ function refresh() {
 function init() {
 	// get the number of jobs currently running or pending for all services
 	services.getProcessDetails()
+		.then(services.getQueueDetails.bind(services))
 		.then(function() {
 			app.listen(80, "0.0.0.0", function() {console.log('Listening on port 80!')});
 			services.startProcessingJobs();
@@ -83,7 +85,22 @@ app.post('/webhooks/queues/items/created', function(req, res) {
 	}
 	console.log("New queue item added");
 
-	services.startJobForQueue(req.body.QueueItem.QueueDefinitionId, 1);
+	req.body.QueueItems.forEach(function(queueItem) {
+		services.startJobForQueue(queueItem.QueueDefinitionId, 1);
+	});
+
+	res.send();
+});
+
+app.post('/webhooks/queues/items/completed', function(req, res) {
+	if (!checkSecretKey(req.headers['x-uipath-signature'], req.buffer)) {
+		console.log("Wrong signature!");
+		res.status(401);
+		return;
+	}
+	console.log("Queue item completed");
+
+	services.checkQueueLinks(req.body.QueueItem);
 
 	res.send();
 });

@@ -1,16 +1,36 @@
 {
 	"services": [
 		{
-			"queueName": "Customers",
-			"processName": "sum",
-			"environmentName": "serverrobot",
+			"queueName": "Leads",
+			"processName": "processLeads",
+			"environmentName": "all",
 			"maxRobots": 2
 		},
 		{
-			"queueName": "queue2",
-			"processName": "LogMessages",
-			"environmentName": "LiviuEnv",
-			"maxRobots": 3
+			"queueName": "KYC",
+			"processName": "processKYC",
+			"environmentName": "all",
+			"maxRobots": 4
+		}
+	],
+	"queueLinks": [
+		{
+			"input": [
+				"Leads"
+			],
+			"output": [
+				"Prospects",
+				"KYC"
+			]
+		},
+		{
+			"input": [
+				"Prospects",
+				"KYC"
+			],
+			"output": [
+				"Customers"
+			]
 		}
 	],
 	"connection": {

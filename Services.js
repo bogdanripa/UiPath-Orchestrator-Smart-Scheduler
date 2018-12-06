@@ -2,6 +2,7 @@ var Orchestrator = require('uipath-orchestrator');
 
 function Services(settings) {
 	this.settings = settings;
+	this.settings.queues = {};
 	this.orchestrator = new Orchestrator(settings.connection);
 }
 
@@ -46,20 +47,20 @@ Services.prototype.getProcessKey = function(service) {
 }
 
 // updates the service object with the queue Id
-Services.prototype.getQueueId = function(service) {
+Services.prototype.getQueueId = function(queueName) {
 	return new Promise(function (fulfill, reject){
-		this.orchestrator.v2.odata.getQueueDefinitions({"$filter": "Name eq '" + odataEscape(service.queueName) + "'"}, function(err, data) {
+		this.orchestrator.v2.odata.getQueueDefinitions({"$filter": "Name eq '" + odataEscape(queueName) + "'"}, function(err, data) {
 			if (err) {
 				reject(err);
 			} else {
 				try {
-					service.queueId = data.value[0].Id;
+					this.settings.queues[queueName] = data.value[0].Id;
 					fulfill();
 				} catch(err) {
 					reject("Malformed response: Cannot get process key");
 				}
 			}
-		});
+		}.bind(this));
 	}.bind(this));
 }
 
@@ -72,13 +73,38 @@ Services.prototype.getProcessDetails = function() {
 			if (!service.key) {
 				servicesPromises.push(this.getProcessKey(service));
 			}
-			if (!service.queueId) {
-				servicesPromises.push(this.getQueueId(service));
+			if (!this.settings.queues[service.queueName]) {
+				servicesPromises.push(this.getQueueId(service.queueName));
 			}
 		}.bind(this));
 		Promise.all(servicesPromises)
 			.then(function() {
 				console.log("Got all current running jobs details");
+				fulfill();
+			})
+			.catch(reject);
+	}.bind(this));
+}
+
+Services.prototype.getQueueDetails = function() {
+	return new Promise(function (fulfill, reject){
+		var queuePromises = [];
+		this.settings.queueLinks.forEach(function(queueLink) {
+			queueLink.input.forEach(function(queueName) {
+				if (!this.settings.queues[queueName]) {
+					queuePromises.push(this.getQueueId(queueName));
+				}
+			}.bind(this));
+
+			queueLink.output.forEach(function(queueName) {
+				if (!this.settings.queues[queueName]) {
+					queuePromises.push(this.getQueueId(queueName));
+				}
+			}.bind(this));
+		}.bind(this));
+		Promise.all(queuePromises)
+			.then(function() {
+				console.log("Got all current queue details");
 				fulfill();
 			})
 			.catch(reject);
@@ -106,7 +132,7 @@ Services.prototype.startProcessing = function(service) {
 					var newJobsCount = Math.min(itemsToProcess, service.maxRobots - service.count);
 					console.log(service.processName + ": " + newJobsCount + " jobs to start");
 					if (newJobsCount > 0) {
-						this.startJobForQueue(service.queueId, newJobsCount);
+						this.startJobForQueue(this.settings.queues[service.queueName], newJobsCount);
 					}
 					fulfill();
 				} catch(err) {
@@ -135,36 +161,37 @@ Services.prototype.startProcessingJobs = function() {
 
 // queues a number of jobs for a specific process corresponding to a queue id
 Services.prototype.startJobForQueue = function(queueId, runs) {
-	return new Promise(function (fulfill, reject){
-		var key = '';
-		var shouldRun = false;
-	
-		var service = this.settings.services.find(function(service) {
-			return service.queueId == queueId;
-		});
-	
-		if (service) {
-			if (service.count + 1 > service.maxRobots) {
-				console.log(service.queueName + ": max robots reached");
-				fulfill();
-				return;
-			}
-			jobParams = {
-				"startInfo": {
-					"ReleaseKey": service.key,
-					"Strategy": "JobsCount",
-					"JobsCount": runs,
-					"Source": "Schedule",
-					"InputArguments": "{}"
-				}
-		
-			};
+	var key = '';
+	var shouldRun = false;
 
-			this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, fulfill);
-		} else {
-			reject("No job found for queue " + queueId);
-		}
+	var service = this.settings.services.find(function(service) {
+		return this.settings.queues[service.queueName] == queueId;
 	}.bind(this));
+
+	if (service) {
+		if (service.count + 1 > service.maxRobots) {
+			console.log(service.queueName + ": max robots reached");
+			return;
+		}
+		jobParams = {
+			"startInfo": {
+				"ReleaseKey": service.key,
+				"Strategy": "JobsCount",
+				"JobsCount": runs,
+				"Source": "Schedule",
+				"InputArguments": "{}"
+			}
+	
+		};
+
+		this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function(err, data){
+			if (err) {
+				console.log(err);
+			}
+		});
+	} else {
+		console.log("No job found for queue " + queueId);
+	}
 }
 
 Services.prototype.onJobFinished = function(jobName) {
@@ -184,6 +211,81 @@ Services.prototype.onJobCreated = function(jobName) {
 	if (service) {
 		service.count++;
 		console.log(jobName + ": is running " + service.count + " times");
+	}
+}
+
+function arrayContainsArray (superset, subset) {
+				  if (0 === subset.length) {
+									    return false;
+									  }
+				  return subset.every(function (value) {
+									    return (superset.indexOf(value) >= 0);
+									  });
+}
+
+Services.prototype.checkQueueLinks = function(queue) {
+	var partOfALink = false;
+	var queueLinks = [];
+	this.settings.queueLinks.forEach(function(queueLink) {
+		queueLink.input.forEach(function(queueName) {
+			if (queue.QueueDefinitionId == this.settings.queues[queueName]) {
+				queueLinks.push(queueLink);
+				partOfALink = true;
+			}
+		}.bind(this));
+	}.bind(this));
+
+	if (partOfALink) {
+		this.orchestrator.v2.odata.getQueueItems({"$filter": "Reference eq '" + queue.Reference + "' and Status eq 'Successful'"}, function(err, data) {
+			if (err) {
+				console.log(err);
+			} else {
+				try {
+					var queueIDs = {};
+					var queueNames = [];
+					var queueOutput = {};
+					data.value.forEach(function(queueItem) {
+						if (!queueOutput[queueItem.QueueDefinitionId]) {
+							queueIDs[queueItem.QueueDefinitionId] = true;
+							queueOutput = Object.assign(queueOutput, queueItem.Output);
+						}
+					}.bind(this));
+
+					Object.keys(this.settings.queues).forEach(function(queueName) {
+						if (queueIDs[this.settings.queues[queueName]]) {
+							queueNames.push(queueName);
+						}
+					}.bind(this));
+
+					queueLinks.forEach(function(queueLink) {
+						if (arrayContainsArray(queueNames, queueLink.input)) {
+							// all items were processed, create new queue item
+
+							queueLink.output.forEach(function(queueName) {
+								var newQueueItem = {
+									"itemData": {
+										"Name": queueName,
+										"SpecificContent": queueOutput,
+										"Reference": queue.Reference
+									}
+								};
+								this.orchestrator.v2.odata.postAddQueueItem(newQueueItem, function(err, data) {
+									if (err) {
+										console.log(err);
+										return;
+									}
+									console.log("Queue Link matched, created new queue item");
+								});
+							}.bind(this));
+						}
+					}.bind(this));
+
+				} catch(err) {
+					console.log("Malformed response: Cannot get queue items by reference: " + err);
+				}
+			}
+		}.bind(this));
+		
 	}
 }
 
