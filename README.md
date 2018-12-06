@@ -7,8 +7,9 @@ Node.js app that will automatically run a process when a queue item is added
 2. git clone this repo
 3. run "npm install" in the repo folder
 4. edit the settings.json file and add your services. A service consists of a queue name, a process name, an environment name, and the maximum number of robots to run in paralel
-5. run "sudo nodejs index.js" to start the server. Once tested, you will need to make sure it runs continuously using somethnig like "forever". Google "forever nodejs" for details.
-6. In Orchestrator (2018.4 or newer), set-up 3 webhooks that will point to your endpoints:
+5. also in settings.json, update the Orchestrator connectivity details and the webhooks secret key
+6. run "sudo nodejs index.js" to start the server. Once tested, you will need to make sure it runs continuously using somethnig like "forever". Google "forever nodejs" for details.
+7. In Orchestrator (2018.4 or newer), set-up 3 webhooks that will point to your endpoints:
 
 * http://TYPE.YOUR.IP.ADDRESS/webhooks/jobs/created	subscribed to job.created
 * http://TYPE.YOUR.IP.ADDRESS/webhooks/jobs/finished	subscribed to job.completed, job.faulted, job.stopped
