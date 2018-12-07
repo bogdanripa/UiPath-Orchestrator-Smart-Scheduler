@@ -40,7 +40,7 @@ Services.prototype.getProcessKey = function(processName, environmentName) {
 					this.settings.processes[processName + "_" + environmentName] = data.value[0].Key;
 					fulfill();
 				} catch(err) {
-					reject("Malformed response: Cannot get process key: " + err);
+					reject("Malformed response: Cannot get process key for " + processName +" on " + environmentName + ": " + err);
 				}
 			}
 		}.bind(this));
