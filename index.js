@@ -71,8 +71,7 @@ app.post('/webhooks/jobs/finished', function(req, res) {
 		res.status(401);
 		return;
 	}
-
-	services.onJobFinished(req.body.Job.Release.Name);
+	services.onJobFinished(req.body.Job);
 
 	res.send();
 });
@@ -83,7 +82,6 @@ app.post('/webhooks/queues/items/created', function(req, res) {
 		res.status(401);
 		return;
 	}
-	console.log("New queue item added");
 
 	req.body.QueueItems.forEach(function(queueItem) {
 		services.startJobForQueue(queueItem.QueueDefinitionId, 1);
@@ -98,7 +96,6 @@ app.post('/webhooks/queues/items/completed', function(req, res) {
 		res.status(401);
 		return;
 	}
-	console.log("Queue item completed");
 
 	services.checkQueueLinks(req.body.QueueItem);
 

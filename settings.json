@@ -33,6 +33,18 @@
 			]
 		}
 	],
+	"processLinks": [
+		"input": {
+			"processName": "Step1",
+			"environmentName": "all"
+		},
+		"output": [
+			{
+				"processName": "Step2",
+				"environmentName": "all"
+			}
+		]
+	],
 	"connection": {
 		"tenancyName": "Default",           
 		"usernameOrEmailAddress": "api",

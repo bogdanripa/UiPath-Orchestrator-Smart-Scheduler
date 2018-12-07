@@ -3,6 +3,7 @@ var Orchestrator = require('uipath-orchestrator');
 function Services(settings) {
 	this.settings = settings;
 	this.settings.queues = {};
+	this.settings.processes = {};
 	this.orchestrator = new Orchestrator(settings.connection);
 }
 
@@ -29,20 +30,20 @@ Services.prototype.getRunningJobs = function(service) {
 }
 
 // updates the service object with the process key, needed for further API calls
-Services.prototype.getProcessKey = function(service) {
+Services.prototype.getProcessKey = function(processName, environmentName) {
 	return new Promise(function (fulfill, reject){
-		this.orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + odataEscape(service.processName) + "' and EnvironmentName eq '" + odataEscape(service.environmentName) + "'"}, function(err, data) {
+		this.orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + odataEscape(processName) + "' and EnvironmentName eq '" + odataEscape(environmentName) + "'"}, function(err, data) {
 			if (err) {
 				reject(err);
 			} else {
 				try {
-					service.key = data.value[0].Key;
+					this.settings.processes[processName + "_" + environmentName] = data.value[0].Key;
 					fulfill();
 				} catch(err) {
-					reject("Malformed response: Cannot get process key");
+					reject("Malformed response: Cannot get process key: " + err);
 				}
 			}
-		});
+		}.bind(this));
 	}.bind(this));
 }
 
@@ -70,13 +71,21 @@ Services.prototype.getProcessDetails = function() {
 		var servicesPromises = [];
 		this.settings.services.forEach(function(service) {
 			servicesPromises.push(this.getRunningJobs(service));
-			if (!service.key) {
-				servicesPromises.push(this.getProcessKey(service));
+			if (!this.settings.processes[service.processName + "_" + service.environmentName]) {
+				servicesPromises.push(this.getProcessKey(service.processName, service.environmentName));
 			}
 			if (!this.settings.queues[service.queueName]) {
 				servicesPromises.push(this.getQueueId(service.queueName));
 			}
 		}.bind(this));
+
+		this.settings.processLinks.forEach(function(processLink) {
+			processLink.output.forEach(function(linkOutput) {
+				servicesPromises.push(this.getProcessKey(linkOutput.processName, linkOutput.environmentName));
+			}.bind(this));
+			servicesPromises.push(this.getProcessKey(processLink.input.processName, processLink.input.environmentName));
+		}.bind(this));
+
 		Promise.all(servicesPromises)
 			.then(function() {
 				console.log("Got all current running jobs details");
@@ -159,6 +168,24 @@ Services.prototype.startProcessingJobs = function() {
 	}.bind(this));
 }
 
+Services.prototype.startJob = function(jobName, environmentName, runs, inputArgs) {
+	jobParams = {
+		"startInfo": {
+			"ReleaseKey": this.settings.processes[jobName + "_" + environmentName],
+			"Strategy": "JobsCount",
+			"JobsCount": runs,
+			"Source": "Schedule",
+			"InputArguments": JSON.stringify(inputArgs)
+		}
+	};
+
+	this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function(err, data){
+		if (err) {
+			console.log(err);
+		}
+	});
+};
+
 // queues a number of jobs for a specific process corresponding to a queue id
 Services.prototype.startJobForQueue = function(queueId, runs) {
 	var key = '';
@@ -173,34 +200,35 @@ Services.prototype.startJobForQueue = function(queueId, runs) {
 			console.log(service.queueName + ": max robots reached");
 			return;
 		}
-		jobParams = {
-			"startInfo": {
-				"ReleaseKey": service.key,
-				"Strategy": "JobsCount",
-				"JobsCount": runs,
-				"Source": "Schedule",
-				"InputArguments": "{}"
-			}
-	
-		};
-
-		this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function(err, data){
-			if (err) {
-				console.log(err);
-			}
-		});
-	} else {
-		console.log("No job found for queue " + queueId);
+		console.log("Starting " + service.processName + " on " + service.environmentName);
+		this.startJob(service.processName, service.environmentName, runs, {});
 	}
 }
 
-Services.prototype.onJobFinished = function(jobName) {
+Services.prototype.onJobFinished = function(job) {
+	var jobName;
+	Object.keys(this.settings.processes).forEach(function(processName) {
+		if (this.settings.processes[processName] == job.Release.Key) {
+			jobName = processName;
+		}
+	}.bind(this));
+
 	var service = this.settings.services.find(function(service) {
 		return jobName == service.processName + "_" + service.environmentName;
 	});
 	if (service) {
 		service.count--;
 		console.log(jobName + ": is running " + service.count + " times");
+	}
+
+	var processLink = this.settings.processLinks.find(function(processLink) {
+		return jobName == processLink.input.processName + "_" + processLink.input.environmentName;
+	});
+	if (processLink) {
+		processLink.output.forEach(function(outputLink) {
+			console.log("Starting " + outputLink.processName);
+			this.startJob(outputLink.processName, outputLink.environmentName, 1, job.OutputArguments);
+		}.bind(this));
 	}
 }
 
@@ -271,6 +299,10 @@ Services.prototype.checkQueueLinks = function(queue) {
 								};
 								this.orchestrator.v2.odata.postAddQueueItem(newQueueItem, function(err, data) {
 									if (err) {
+										if (data && data.message) {
+											console.log(data.message);
+											return;
+										}
 										console.log(err);
 										return;
 									}
