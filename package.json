@@ -28,6 +28,7 @@
     "body-parser": "^1.18.2",
     "express": "^4.16.3",
     "json-stringify-safe": "^5.0.1",
+    "md5": "^2.2.1",
     "uipath-orchestrator": "^1.0.2"
   }
 }

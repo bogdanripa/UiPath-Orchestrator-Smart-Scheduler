@@ -32,6 +32,10 @@ Services.prototype.getRunningJobs = function(service) {
 // updates the service object with the process key, needed for further API calls
 Services.prototype.getProcessKey = function(processName, environmentName) {
 	return new Promise(function (fulfill, reject){
+		if (this.settings.processes[processName + "_" + environmentName]) {
+			fulfill();
+			return;
+		}
 		this.orchestrator.v2.odata.getReleases({"$filter": "ProcessKey eq '" + odataEscape(processName) + "' and EnvironmentName eq '" + odataEscape(environmentName) + "'"}, function(err, data) {
 			if (err) {
 				reject(err);
@@ -169,21 +173,24 @@ Services.prototype.startProcessingJobs = function() {
 }
 
 Services.prototype.startJob = function(jobName, environmentName, runs, inputArgs) {
-	jobParams = {
-		"startInfo": {
-			"ReleaseKey": this.settings.processes[jobName + "_" + environmentName],
-			"Strategy": "JobsCount",
-			"JobsCount": runs,
-			"Source": "Schedule",
-			"InputArguments": JSON.stringify(inputArgs)
-		}
-	};
+	this.getProcessKey(jobName, environmentName).then(function() {
+		jobParams = {
+			"startInfo": {
+				"ReleaseKey": this.settings.processes[jobName + "_" + environmentName],
+				"Strategy": "JobsCount",
+				"JobsCount": runs,
+				"Source": "Schedule",
+				"InputArguments": JSON.stringify(inputArgs)
+			}
+		};
+	
+		this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function(err, data){
+			if (err) {
+				console.log(err);
+			}
+		});
+	}.bind(this));
 
-	this.orchestrator.post("/odata/Jobs/UiPath.Server.Configuration.OData.StartJobs", jobParams, function(err, data){
-		if (err) {
-			console.log(err);
-		}
-	});
 };
 
 // queues a number of jobs for a specific process corresponding to a queue id
