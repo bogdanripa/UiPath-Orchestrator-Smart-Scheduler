@@ -6,6 +6,8 @@ Node.js app that will manage schedules to:
 
 ## Installation / set-up instructions
 
+**! The easiest way to deply this is using Google Cloud's App Engine: https://cloud.google.com/appengine/**
+
 1. make sure you install this on a computer that has a public IP address
 2. git clone this repo
 3. run "npm install" in the repo folder
