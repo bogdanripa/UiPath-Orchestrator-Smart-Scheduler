@@ -1,8 +1,10 @@
 # UiPath Orchestrator Smart Scheduler
 Node.js app that will manage schedules to:
 * Automatically run a process when a queue item is added
-* Link queue items, automatically creating new queue items when other queue item(s) are marked as completed. Completed queue items output (in aggregate) becomes the input for the new queue item
 * Start a process when another one has finished. The initial process's output becomes the input for your new process
+* Link queue items, automatically creating new queue items when other queue item(s) are marked as completed. Completed queue items output (in aggregate) becomes the input for the new queue item
+
+See the [settings.json](settings.json) file for details on how to set those up.
 
 ## Installation / set-up instructions
 
