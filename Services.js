@@ -189,7 +189,9 @@ Services.prototype.startJob = function(jobName, environmentName, runs, inputArgs
 				console.log(err);
 			}
 		});
-	}.bind(this));
+	}.bind(this)).catch(function(e) {
+		console.log(e);
+	});
 
 };
 
