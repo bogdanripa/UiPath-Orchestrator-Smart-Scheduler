@@ -62,7 +62,7 @@ Services.prototype.getQueueId = function(queueName) {
 					this.settings.queues[queueName] = data.value[0].Id;
 					fulfill();
 				} catch(err) {
-					reject("Malformed response: Cannot get process key");
+					reject("Malformed response: Cannot get queue dewfinition for " + queueName);
 				}
 			}
 		}.bind(this));
