@@ -47,6 +47,13 @@
 			]
 		}
 	],
+	"processRetries": [
+		{
+			"processName": "PayInvoice",
+			"environmentName": "all",
+			"retries": 3
+		}
+	],
 	"connection": {
 		"tenancyName": "Default",           
 		"usernameOrEmailAddress": "api",

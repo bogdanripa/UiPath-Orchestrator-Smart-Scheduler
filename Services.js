@@ -83,6 +83,10 @@ Services.prototype.getProcessDetails = function() {
 			}
 		}.bind(this));
 
+		this.settings.processRetries.forEach(function(process) {
+			servicesPromises.push(this.getProcessKey(process.processName, process.environmentName));
+		}.bind(this));
+
 		this.settings.processLinks.forEach(function(processLink) {
 			processLink.output.forEach(function(linkOutput) {
 				servicesPromises.push(this.getProcessKey(linkOutput.processName, linkOutput.environmentName));
@@ -190,7 +194,6 @@ Services.prototype.startJob = function(jobName, environmentName, runs, inputArgs
 			}
 		});
 	}.bind(this));
-
 };
 
 // queues a number of jobs for a specific process corresponding to a queue id
@@ -228,14 +231,38 @@ Services.prototype.onJobFinished = function(job) {
 		console.log(jobName + ": is running " + service.count + " times");
 	}
 
-	var processLink = this.settings.processLinks.find(function(processLink) {
-		return jobName == processLink.input.processName + "_" + processLink.input.environmentName;
+	var processRetry = this.settings.processRetries.find(function(process) {
+		return jobName == process.processName + "_" + process.environmentName;
 	});
-	if (processLink) {
-		processLink.output.forEach(function(outputLink) {
-			console.log("Starting " + outputLink.processName);
-			this.startJob(outputLink.processName, outputLink.environmentName, 1, job.OutputArguments);
-		}.bind(this));
+
+	switch (job.State) {
+		case "Successful":
+
+			if (processRetry) {
+				processRetry.failCount = 0;
+			}
+
+			var processLink = this.settings.processLinks.find(function(processLink) {
+				return jobName == processLink.input.processName + "_" + processLink.input.environmentName;
+			});
+			if (processLink) {
+				processLink.output.forEach(function(outputLink) {
+					console.log("Starting " + outputLink.processName);
+					this.startJob(outputLink.processName, outputLink.environmentName, 1, job.OutputArguments);
+				}.bind(this));
+			}
+			break;
+		case "Faulted":
+			if (processRetry) {
+				processRetry.failCount++;
+				if (!processRetry.failCount) {
+					processRetry.failCount = 0;
+				}
+				if (processRetry.failCount <= processRetry.retires) {
+					this.startJob(processRetry.processName, processRetry.environmentName, 1, {} /*job.InputArguments*/);
+				}
+			}
+			break;
 	}
 }
 
