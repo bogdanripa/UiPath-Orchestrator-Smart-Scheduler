@@ -34,16 +34,25 @@
 		}
 	],
 	"processLinks": [
-		"input": {
-			"processName": "Step1",
-			"environmentName": "all"
-		},
-		"output": [
-			{
-				"processName": "Step2",
+		{
+			"input": {
+				"processName": "Step1",
 				"environmentName": "all"
-			}
-		]
+			},
+			"output": [
+				{
+					"processName": "Step2",
+					"environmentName": "all"
+				}
+			]
+		}
+	],
+	"processRetries": [
+		{
+			"processName": "PayInvoice",
+			"environmentName": "all",
+			"retries": 3
+		}
 	],
 	"connection": {
 		"tenancyName": "Default",           
