@@ -35,7 +35,10 @@ function init() {
 	services.getProcessDetails()
 		.then(services.getQueueDetails.bind(services))
 		.then(function() {
-			app.listen(8080, "0.0.0.0", function() {console.log('Listening on port 80!')});
+			const server = app.listen(process.env.PORT || 8080, "0.0.0.0", function() {
+				const port = server.address().port;
+				console.log(`Listening on port ${port}!`)
+			});
 			services.startProcessingJobs();
 			setInterval(refresh, settings.refreshInterval*1000);
 		})
