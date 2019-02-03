@@ -114,7 +114,6 @@ app.post('/webhooks/jobs/start', function(req, res) {
 		res.status(401).send();
 		return;
 	}
-	console.log("Starting " + req.body.processName + " on " + req.body.envName + " with " + JSON.stringify(req.body.processArgs));
 	services.startJob(req.body.processName, req.body.envName, 1, req.body.processArgs);
 	res.status(200).send("Request sent");
 	return;

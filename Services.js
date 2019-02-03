@@ -177,6 +177,7 @@ Services.prototype.startProcessingJobs = function() {
 }
 
 Services.prototype.startJob = function(jobName, environmentName, runs, inputArgs) {
+	console.log("Starting " + jobName + " on " + environmentName + " " + runs + " time(s) with " + JSON.stringify(inputArgs));
 	this.getProcessKey(jobName, environmentName).then(function() {
 		jobParams = {
 			"startInfo": {
@@ -212,13 +213,13 @@ Services.prototype.startJobForQueue = function(queueId, runs) {
 			console.log(service.queueName + ": max robots reached");
 			return;
 		}
-		console.log("Starting " + service.processName + " on " + service.environmentName);
 		this.startJob(service.processName, service.environmentName, runs, {});
 	}
 }
 
 Services.prototype.onJobFinished = function(job) {
 	var jobName;
+	if (!job) return;
 	Object.keys(this.settings.processes).forEach(function(processName) {
 		if (this.settings.processes[processName] == job.Release.Key) {
 			jobName = processName;
@@ -230,7 +231,7 @@ Services.prototype.onJobFinished = function(job) {
 	});
 	if (service) {
 		service.count--;
-		console.log(jobName + ": is running " + service.count + " times");
+		console.log(jobName + ": is running " + service.count + " time(s)");
 	}
 
 	var processRetry = this.settings.processRetries.find(function(process) {
@@ -249,19 +250,21 @@ Services.prototype.onJobFinished = function(job) {
 			});
 			if (processLink) {
 				processLink.output.forEach(function(outputLink) {
-					console.log("Starting " + outputLink.processName);
 					this.startJob(outputLink.processName, outputLink.environmentName, 1, job.OutputArguments);
 				}.bind(this));
 			}
 			break;
 		case "Faulted":
 			if (processRetry) {
-				processRetry.failCount++;
 				if (!processRetry.failCount) {
 					processRetry.failCount = 0;
 				}
-				if (processRetry.failCount <= processRetry.retires) {
+				processRetry.failCount++;
+				if (processRetry.failCount <= processRetry.retries) {
+					console.log("Process execution failed for " + processRetry.processName + " on " + processRetry.environmentName + ". Retrying...");
 					this.startJob(processRetry.processName, processRetry.environmentName, 1, {} /*job.InputArguments*/);
+				} else {
+					console.log("Retry count exceded for " + processRetry.processName + " on " + processRetry.environmentName);
 				}
 			}
 			break;
@@ -274,7 +277,7 @@ Services.prototype.onJobCreated = function(jobName) {
 	});
 	if (service) {
 		service.count++;
-		console.log(jobName + ": is running " + service.count + " times");
+		console.log(jobName + ": is running " + service.count + " time(s)");
 	}
 }
 
