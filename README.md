@@ -16,7 +16,7 @@ See the [settings.json](settings.json) file for details on how to set those up.
 3. run "npm install"
 4. edit the settings.json file and
    1. add your services. A service consists of a queue name, a process name, an environment name, and the maximum number of robots to run in paralel. This is how you start a process when queue items are added.
-   2. add process links. The input represent the process you want to monitor for completion. the output represents the process(es) you want to start whwen the previous one finishes succesfully.
+   2. add process links. The input represent the process you want to monitor for completion. the output represents the process(es) you want to start when the previous one finishes succesfully.
    3. add process retries. This is how you retry a process on fail. Warning! When a process is retried, its input arguments are lost (at least for now)
    4. add queue links. The input represent the queue(s) that you want to monitor for completed items. The output represents the queue(s) where you want new queue items to be added. Queue items are matched by reference.
 5. also in settings.json, update the Orchestrator connectivity details and the webhooks secret key
