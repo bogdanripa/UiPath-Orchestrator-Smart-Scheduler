@@ -11,6 +11,18 @@ function odataEscape(str) {
 	return str.replace(/'/g, "''");
 }
 
+Services.prototype.getJobDetails = function(jobId) {
+	return new Promise(function (fulfill, reject){
+		this.orchestrator.v2.odata.getJob(jobId, {}, function(err, data) {
+			if (err) {
+				reject(err);
+			} else {
+				fulfill(data);
+			}
+		});
+	}.bind(this));
+}
+
 // updates the service object with the number of jobs currently running
 Services.prototype.getRunningJobs = function(service) {
 	return new Promise(function (fulfill, reject){
@@ -261,8 +273,10 @@ Services.prototype.onJobFinished = function(job) {
 				}
 				processRetry.failCount++;
 				if (processRetry.failCount <= processRetry.retries) {
-					console.log("Process execution failed for " + processRetry.processName + " on " + processRetry.environmentName + ". Retrying...");
-					this.startJob(processRetry.processName, processRetry.environmentName, 1, {} /*job.InputArguments*/);
+					this.getJobDetails(job.id).then(function(inputArgsStr) {
+						console.log("Process execution failed for " + processRetry.processName + " on " + processRetry.environmentName + ". Retrying...");
+						this.startJob(processRetry.processName, processRetry.environmentName, 1, JSON.parse(inputArgsStr));
+					}.bind(this));
 				} else {
 					console.log("Retry count exceded for " + processRetry.processName + " on " + processRetry.environmentName);
 				}
