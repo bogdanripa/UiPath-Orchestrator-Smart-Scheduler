@@ -273,9 +273,9 @@ Services.prototype.onJobFinished = function(job) {
 				}
 				processRetry.failCount++;
 				if (processRetry.failCount <= processRetry.retries) {
-					this.getJobDetails(job.id).then(function(inputArgsStr) {
+					this.getJobDetails(job.Id).then(function(job) {
 						console.log("Process execution failed for " + processRetry.processName + " on " + processRetry.environmentName + ". Retrying...");
-						this.startJob(processRetry.processName, processRetry.environmentName, 1, JSON.parse(inputArgsStr));
+						this.startJob(processRetry.processName, processRetry.environmentName, 1, JSON.parse(job.InputArguments));
 					}.bind(this));
 				} else {
 					console.log("Retry count exceded for " + processRetry.processName + " on " + processRetry.environmentName);
